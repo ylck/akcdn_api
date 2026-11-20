@@ -67,3 +67,39 @@ argument=token=ak_你的密钥
 - `PUT https://cdnapi.akile.ai/api/open/rules/<id>/entry-whitelist`
 
 请求头是 `X-API-Key`。请求体是 `{"entry_whitelist":"203.0.113.10"}`。只接受一个 IPv4，可以带 `/32`。每个来源 IP 每分钟最多 120 次。
+
+---
+
+## OpenWrt 自动动态白名单看门狗 (`akcdn_sync.sh`)
+
+除了 Quantumult X，本仓库还提供了适用于 Linux / OpenWrt / 软路由的系统级全自动守护脚本 `akcdn_sync.sh`。
+
+### 特性
+1. **自动获取真实国内出口 IP**：多源兜底（`3322.net` / `4.ipw.cn` / `ddns.oray.com`），确保即使路由器开启透明代理，也能准确测得直连公网 IPv4。
+2. **IP 变动自动同步**：无需指定 ID，自动拉取账号下所有规则并逐一批量更新。
+3. **零开销缓存**：本地记录上次生效 IP，未变动时 0 请求退出，防 API 限流。
+4. **支持 Hotplug 与 Cron**：支持 WAN 重拨瞬间触发，以及每 5 分钟定时检测。
+
+### 部署方法 (OpenWrt)
+
+1. 下载脚本并赋权：
+```sh
+curl -fsSL https://raw.githubusercontent.com/ylck/akcdn_api/master/akcdn_sync.sh -o /usr/bin/akcdn_sync.sh
+chmod +x /usr/bin/akcdn_sync.sh
+```
+
+2. 配置 API Key（编辑 `/usr/bin/akcdn_sync.sh` 将 `API_TOKEN` 替换为你的密钥，或通过环境变量传入）。
+
+3. 配置重拨瞬间触发（Hotplug）：
+```sh
+cat << 'EOT' > /etc/hotplug.d/iface/95-akcdn-sync
+#!/bin/sh
+[ "$ACTION" = "ifup" ] && [ "$INTERFACE" = "wan" ] && /usr/bin/akcdn_sync.sh >/dev/null 2>&1 &
+EOT
+chmod +x /etc/hotplug.d/iface/95-akcdn-sync
+```
+
+4. 添加定时巡检任务（Crontab）：
+```sh
+echo "*/5 * * * * /usr/bin/akcdn_sync.sh >/dev/null 2>&1" >> /etc/crontabs/root
+```
